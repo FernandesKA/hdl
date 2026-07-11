@@ -88,6 +88,10 @@ proc adi_project {project_name {mode 0} {parameter_list {}} } {
     set device "xc7z007sclg400-1"
     set board "not-applicable"
   }
+  if [regexp "_rk_zynq7020f" $project_name] {
+    set device "xc7z020clg484-2"
+    set board "not-applicable"
+  }
   if [regexp "_microzed" $project_name] {
     set device "xc7z010clg400-1"
     set board "not-applicable"

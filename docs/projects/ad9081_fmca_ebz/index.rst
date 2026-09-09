@@ -141,7 +141,7 @@ Supported carriers
    For the carrier,
    :intel:`A10SoC <content/www/us/en/products/details/fpga/development-kits/arria/10-sx.html>`,
    the following reworks are mandatory:
-   :external+documentation:ref:`[Wiki] FMC Pin Connection Configuration <ad9081 quickstart a10soc>`
+   :external+system-level:ref:`[Wiki] FMC Pin Connection Configuration <ad9081 quickstart a10soc>`
 
 .. warning::
    For
@@ -541,7 +541,7 @@ Building the HDL project
 
 The design is built upon ADI's generic HDL reference design framework. ADI
 distributes the bit/elf files of these projects as part of the
-:external+documentation:ref:`ADI Kuiper Linux <kuiper>`. If you want to build
+:external+system-level:ref:`ADI Kuiper Linux <kuiper>`. If you want to build
 the sources, ADI makes them available on the :git-hdl:`HDL repository </>`. To
 get the source you must
 `clone <https://git-scm.com/book/en/v2/Git-Basics-Getting-a-Git-Repository>`__
@@ -692,7 +692,25 @@ configure this project, depending on the carrier used. Where a cell contains a
    |                   +--------+--------+--------+--------------+--------------+
    |                   | VCK190 | VPK180 | VCU118 |        ZC706 |       ZCU102 |
    +===================+========+========+========+==============+==============+
-   | JESD_MODE         | 64B66B | 64B66B |  8B10B | :red:`8B10B*`| :red:`8B10B*`|
+   | **XCVR build parameters**                                                  |
+   +-------------------+--------+--------+--------+--------------+--------------+
+   | PLL_TYPE          |    --- |    --- |  QPLL0 |         QPLL |        QPLL0 |
+   +-------------------+--------+--------+--------+--------------+--------------+
+   | LANE_RATE         |    --- |    --- |     15 |           10 |           15 |
+   +-------------------+--------+--------+--------+--------------+--------------+
+   | REF_CLK           |    --- |    --- |    750 |          250 |          750 |
+   +-------------------+--------+--------+--------+--------------+--------------+
+   | **Optional XCVR overrides**                                                |
+   +-------------------+--------+--------+--------+--------------+--------------+
+   | XCVR_RX_PLL_TYPE  |    --- |    --- |    --- |          --- |          --- |
+   +-------------------+--------+--------+--------+--------------+--------------+
+   | XCVR_RX_LANE_RATE |    --- |    --- |    --- |          --- |          --- |
+   +-------------------+--------+--------+--------+--------------+--------------+
+   | XCVR_RX_REF_CLK   |    --- |    --- |    --- |          --- |          --- |
+   +-------------------+--------+--------+--------+--------------+--------------+
+   | **JESD and other build parameters**                                        |
+   +-------------------+--------+--------+--------+--------------+--------------+
+   | JESD_MODE         | 64B66B | 64B66B |  8B10B | :red:`8B10B*`|       8B10B  |
    +-------------------+--------+--------+--------+--------------+--------------+
    | RX_LANE_RATE      |  24.75 |  24.75 |     15 |           10 |           15 |
    +-------------------+--------+--------+--------+--------------+--------------+
@@ -816,9 +834,9 @@ Resources
 Systems related
 ~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~~
 
-- :external+documentation:ref:`AD9081 & AD9082 & AD9988 & AD9986 Prototyping Platform User Guide <ad9081>`
+- :external+system-level:ref:`AD9081 & AD9082 & AD9988 & AD9986 Prototyping Platform User Guide <ad9081>`
 - Here you can find all the quick start guides on wiki documentation
-  :external+documentation:ref:`AD9081/AD9082/AD9986/AD9988 Quick Start Guides <ad9081 quickstart>`
+  :external+system-level:ref:`AD9081/AD9082/AD9986/AD9988 Quick Start Guides <ad9081 quickstart>`
 
 Here you can find the quick start guides available for these evaluation boards:
 
@@ -834,11 +852,11 @@ Here you can find the quick start guides available for these evaluation boards:
      - Arria 10
      - FM87
    * - AD9081/AD9082/AD9986/AD9988
-     - :external+documentation:ref:`ZC706 <ad9081 quickstart zc706>`
-     - :external+documentation:ref:`ZCU102 <ad9081 quickstart zcu102>`
-     - :external+documentation:ref:`VCU118 <ad9081 quickstart vcu118>`
-     - :external+documentation:ref:`VCK190 <ad9081 quickstart vck190>`
-     - :external+documentation:ref:`A10SoC <ad9081 quickstart a10soc>`
+     - :external+system-level:ref:`ZC706 <ad9081 quickstart zc706>`
+     - :external+system-level:ref:`ZCU102 <ad9081 quickstart zcu102>`
+     - :external+system-level:ref:`VCU118 <ad9081 quickstart vcu118>`
+     - :external+system-level:ref:`VCK190 <ad9081 quickstart vck190>`
+     - :external+system-level:ref:`A10SoC <ad9081 quickstart a10soc>`
      - :dokuwiki:`FM87 <resources/eval/user-guides/ad9081/quickstart/fm87>`
 
 Hardware related

@@ -274,6 +274,8 @@ avl_adxcfg_2.rcfg_s1              0x0004_A000
 avl_adxcfg_3.rcfg_s1              0x0004_B000
 axi_ad9680_dma.s_axi              0x0004_C000
 axi_ad9680.s_axi                  0x0005_0000
+ad9144_data_offload.s_axi         0x0006_0000
+ad9680_data_offload.s_axi         0x0007_0000
 ================================= ===========
 
 SPI connections
@@ -464,7 +466,7 @@ Building the HDL project
 
 The design is built upon ADI's generic HDL reference design framework. ADI
 distributes the bit/elf files of these projects as part of the
-:external+documentation:ref:`ADI Kuiper Linux <kuiper>`. If you want to build
+:external+system-level:ref:`ADI Kuiper Linux <kuiper>`. If you want to build
 the sources, ADI makes them available on the :git-hdl:`HDL repository </>`. To
 get the source you must
 `clone <https://git-scm.com/book/en/v2/Git-Basics-Getting-a-Git-Repository>`__

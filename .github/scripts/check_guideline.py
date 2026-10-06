@@ -2,8 +2,37 @@
 
 ##############################################################################
 ## Copyright (C) 2022-2023, 2026 Analog Devices, Inc. All rights reserved.
-### SPDX short identifier: ADIBSD
-#
+## Short identifier: ADIBSD
+##
+## Redistribution and use in source and binary forms, with or without modification,
+## are permitted provided that the following conditions are met:
+##     - Redistributions of source code must retain the above copyright
+##       notice, this list of conditions and the following disclaimer.
+##     - Redistributions in binary form must reproduce the above copyright
+##       notice, this list of conditions and the following disclaimer in
+##       the documentation and/or other materials provided with the
+##       distribution.
+##     - Neither the name of Analog Devices, Inc. nor the names of its
+##       contributors may be used to endorse or promote products derived
+##       from this software without specific prior written permission.
+##     - The use of this software may or may not infringe the patent rights
+##       of one or more patent holders. This license does not release you
+##       from the requirement that you obtain separate licenses from these
+##       patent holders to use this software.
+##     - Use of the software either in source or binary form, must be run
+##       on or directly connected to an Analog Devices Inc. component.
+##
+## THIS SOFTWARE IS PROVIDED BY ANALOG DEVICES "AS IS" AND ANY EXPRESS OR IMPLIED WARRANTIES,
+## INCLUDING, BUT NOT LIMITED TO, NON-INFRINGEMENT, MERCHANTABILITY AND FITNESS FOR A
+## PARTICULAR PURPOSE ARE DISCLAIMED.
+##
+## IN NO EVENT SHALL ANALOG DEVICES BE LIABLE FOR ANY DIRECT, INDIRECT, INCIDENTAL, SPECIAL,
+## EXEMPLARY, OR CONSEQUENTIAL DAMAGES (INCLUDING, BUT NOT LIMITED TO, INTELLECTUAL PROPERTY
+## RIGHTS, PROCUREMENT OF SUBSTITUTE GOODS OR SERVICES; LOSS OF USE, DATA, OR PROFITS; OR
+## BUSINESS INTERRUPTION) HOWEVER CAUSED AND ON ANY THEORY OF LIABILITY, WHETHER IN CONTRACT,
+## STRICT LIABILITY, OR TORT (INCLUDING NEGLIGENCE OR OTHERWISE) ARISING IN ANY WAY OUT OF
+## THE USE OF THIS SOFTWARE, EVEN IF ADVISED OF THE POSSIBILITY OF SUCH DAMAGE.
+##
 ## Check readme_check_guideline.md from the same folder, for more details.
 ##############################################################################
 
@@ -12,6 +41,70 @@ import re
 import codecs
 import sys
 from datetime import datetime
+
+###############################################################################
+#
+# Load the reference license body texts from the repository root.
+# These are used by check_copyright() to validate that files with a
+# "Short identifier:" tag contain the correct full license text.
+###############################################################################
+_script_dir = os.path.dirname(os.path.abspath(__file__))
+_repo_root = os.path.normpath(os.path.join(_script_dir, "..", ".."))
+
+def _load_license_body(filename, skip_lines):
+    path = os.path.join(_repo_root, filename)
+    with open(path, "r") as f:
+        lines = f.read().rstrip("\n").split("\n")
+    return lines[skip_lines:]
+
+LICENSE_ADIBSD_BODY = _load_license_body("LICENSE_ADIBSD", 4)
+LICENSE_ADIJESD204_BODY = _load_license_body("LICENSE_ADIJESD204", 2)
+
+OLD_DUAL_LICENSE_BODY = [
+    "",
+    "In this HDL repository, there are many different and unique modules, consisting",
+    "of various HDL (Verilog or VHDL) components. The individual modules are",
+    "developed independently, and may be accompanied by separate and unique license",
+    "terms.",
+    "",
+    "The user should read each of these license terms, and understand the",
+    "freedoms and responsibilities that he or she has by using this source/core.",
+    "",
+    "This core is distributed in the hope that it will be useful, but WITHOUT ANY",
+    "WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR",
+    "A PARTICULAR PURPOSE.",
+    "",
+    "Redistribution and use of source or resulting binaries, with or without modification",
+    "of this file, are permitted under one of the following two license terms:",
+    "",
+    "  1. The GNU General Public License version 2 as published by the",
+    "     Free Software Foundation, which can be found in the top level directory",
+    "     of this repository (LICENSE_GPL2), and also online at:",
+    "     <https://www.gnu.org/licenses/old-licenses/gpl-2.0.html>",
+    "",
+    "OR",
+    "",
+    "  2. An ADI specific BSD license, which can be found in the top level directory",
+    "     of this repository (LICENSE_ADIBSD), and also on-line at:",
+    "     https://github.com/analogdevicesinc/hdl/blob/main/LICENSE_ADIBSD",
+    "     This will allow to generate bit files and not release the source code,",
+    "     as long as it attaches to an ADI device.",
+    "",
+]
+
+
+def _strip_comment_prefix(line):
+    line = line.rstrip("\n").rstrip("\r")
+    if line.startswith("// "):
+        return line[3:]
+    if line == "//" or line == "//\n":
+        return ""
+    if line.startswith("## "):
+        return line[3:]
+    if line == "##" or line == "##\n":
+        return ""
+    return line
+
 
 ##############################################################################
 #
@@ -349,6 +442,27 @@ def check_hdl_filename(filename):
 
 ###############################################################################
 #
+# Non-HDL file extensions that receive the lightweight license-only check
+# (copyright year + ADIBSD/ADIJESD204 license body). HDL files (.v/.sv) go
+# through the full guideline check instead.
+###############################################################################
+LICENSE_ONLY_EXTENSIONS = (".tcl", ".ttcl", ".xdc", ".sdc", ".pdc",
+                           ".py", ".sh", ".pl", ".vh")
+
+
+def check_license_only_filename(filename):
+
+    # testbench HDL files (those containing "tb") are excluded from the full
+    # guideline check by check_hdl_filename, but they still get the lightweight
+    # license-only check (copyright year + license body), just like non-HDL files.
+    if (filename.endswith(".v") or filename.endswith(".sv")):
+        return filename.find("tb") != -1
+
+    return filename.endswith(LICENSE_ONLY_EXTENSIONS)
+
+
+###############################################################################
+#
 # Detect all HDL files (.v, .sv) present in the given directory in /library and
 # /projects.
 # Return a list with the relative paths.
@@ -365,6 +479,30 @@ def detect_all_hdl_files (directory):
             for file in files:
                 #filename_wout_ext = (os.path.splitext(file)[0])
                 if (check_hdl_filename(file)):
+                    fullpath = os.path.join(folder, file)
+                    detected_files.append(fullpath)
+
+    return detected_files
+
+
+###############################################################################
+# Detect all testbench HDL files (.v, .sv containing "tb") in /library and
+# /projects. These get only the lightweight license-only check, so they are
+# collected separately from the full-check HDL files.
+# Return a list with the relative paths.
+###############################################################################
+def detect_all_tb_files (directory):
+
+    detected_files = []
+    for folder, dirs, files in os.walk(directory):
+        ## folder name must be either library or projects,
+        ## and it must not contain a dot in the name (Vivado generated)
+        if ((folder[1:-2]).find(".") == -1
+            and (folder.find("library") != -1 or folder.find("projects") != -1)):
+
+            for file in files:
+                if ((file.endswith(".v") or file.endswith(".sv"))
+                    and file.find("tb") != -1):
                     fullpath = os.path.join(folder, file)
                     detected_files.append(fullpath)
 
@@ -540,10 +678,27 @@ avoid_list = []
 avoid_list.append("fir_interp")
 avoid_list.append("cic_interp")
 
+copyright_skip_list = [
+    "library/corundum/corundum_core/corundum_core.v",
+    "library/corundum/corundum_core/mqnic_app_block.v",
+    "library/corundum/ethernet/adrv9009zu11eg/ethernet_adrv9009zu11eg.v",
+    "library/corundum/ethernet/k26/ethernet_k26.v",
+    "library/corundum/ethernet/vcu118/ethernet_vcu118.v",
+    "library/corundum/ethernet/xcvu11p/ethernet_xcvu11p.v",
+    "library/corundum/application_core/application_core.v",
+]
+
 def header_check_allowed (module_path):
 
     for str in avoid_list:
         if (module_path.find(str) != -1):
+            return False
+    return True
+
+def copyright_check_allowed(module_path):
+
+    for skip in copyright_skip_list:
+        if module_path.endswith(skip):
             return False
     return True
 
@@ -557,56 +712,14 @@ def header_check_allowed (module_path):
 #   - or a comma-separated list combining ranges and/or single years when the
 #     gap between the last recorded year and the current year is greater than 1.
 ###############################################################################
-def check_copyright(file_path: str, list_of_lines, lw, edit_files):
+def _parse_copyright_years(file_path, list_of_lines, line_nb, currentYear, lw, edit_files,
+                           allow_old_dual=True):
 
-    currentYear = datetime.now().year
-
-#    license_header = """// ***************************************************************************
-#// ***************************************************************************
-#// Copyright (C) """ + str(currentYear) + """ Analog Devices, Inc. All rights reserved.
-#//
-#// In this HDL repository, there are many different and unique modules, consisting
-#// of various HDL (Verilog or VHDL) components. The individual modules are
-#// developed independently, and may be accompanied by separate and unique license
-#// terms.
-#//
-#// The user should read each of these license terms, and understand the
-#// freedoms and responsibilities that he or she has by using this source/core.
-#//
-#// This core is distributed in the hope that it will be useful, but WITHOUT ANY
-#// WARRANTY; without even the implied warranty of MERCHANTABILITY or FITNESS FOR
-#// A PARTICULAR PURPOSE.
-#//
-#// Redistribution and use of source or resulting binaries, with or without modification
-#// of this file, are permitted under one of the following two license terms:
-#//
-#//   1. The GNU General Public License version 2 as published by the
-#//      Free Software Foundation, which can be found in the top level directory
-#//      of this repository (LICENSE_GPL2), and also online at:
-#//      <https://www.gnu.org/licenses/old-licenses/gpl-2.0.html>
-#//
-#// OR
-#//
-#//   2. An ADI specific BSD license, which can be found in the top level directory
-#//      of this repository (LICENSE_ADIBSD), and also on-line at:
-#//      https://github.com/analogdevicesinc/hdl/blob/main/LICENSE_ADIBSD
-#//      This will allow to generate bit files and not release the source code,
-#//      as long as it attaches to an ADI device.
-#//
-#// ***************************************************************************
-#// ***************************************************************************"""
-    changed = False
-    header_status = -1
-
-    # for further development, if the entire license should be checked
-    # number of lines for the license header text, including the last line
-    #lh_nb = license_header.count('\n') + 1
-
-    # if this is the line with the Copyright year
-    line_nb = 2
-    if line_nb >= len(list_of_lines):
-        lw.append(file_path + " : copyright template doesn't match")
-        return 4
+    # Validate and (optionally) normalize the copyright years on the Copyright
+    # line at list_of_lines[line_nb]. Appends warnings to lw and rewrites the
+    # line in place when edit_files is set.
+    # Returns the header status: 4 (no copyright match), 1 (updated),
+    # 3 (out of date but not edited), 2 (up to date / normalized).
 
     line = list_of_lines[line_nb]
 
@@ -730,13 +843,215 @@ def check_copyright(file_path: str, list_of_lines, lw, edit_files):
 
     elif not edit_files and changed:
         # files not to be edited and header is not up-to-date
-        lw.append(file_path + " : license header cannot be updated")
+        lw.append(file_path + " : license header must be updated manually")
         header_status = 3
     else:
         # files can be changed and header got updated
         header_status = 2
 
+    # SPDX rejection: ADIBSD and ADIJESD204 must not use SPDX
+    if len(list_of_lines) > 0:
+        first_line = list_of_lines[0]
+        spdx_m = re.search(r'SPDX-License-Identifier:\s*(ADIBSD|ADIJESD204)', first_line)
+        if spdx_m:
+            lw.append(file_path + " : SPDX cannot be used for " + spdx_m.group(1) + " license; full license text is required")
+
+    # License body validation: check "Short identifier" on the line after copyright
+    id_line_nb = line_nb + 1
+    if id_line_nb < len(list_of_lines):
+        id_line = list_of_lines[id_line_nb]
+        id_match = re.search(r'Short\s+identifier:\s*(ADIBSD|ADIJESD204)', id_line)
+
+        if id_match:
+            license_type = id_match.group(1)
+            if license_type == "ADIBSD":
+                ref_body = LICENSE_ADIBSD_BODY
+            else:
+                ref_body = LICENSE_ADIJESD204_BODY
+
+            # body starts 2 lines after the short identifier (skip the blank comment line)
+            body_start = id_line_nb + 2
+            # the full-text licenses have a fixed number of body lines; compare
+            # exactly that many. Additional header comments (e.g. a script
+            # description) may follow the license text before the closing
+            # border, so the border position is not used to size the body.
+            body_end = body_start + len(ref_body)
+
+            if body_end > len(list_of_lines):
+                lw.append(file_path + " : license body for " + license_type +
+                          " is too short (expected " + str(len(ref_body)) + " lines)")
+            else:
+                file_body = [_strip_comment_prefix(list_of_lines[bi]) for bi in range(body_start, body_end)]
+                for li in range(len(ref_body)):
+                    file_l = file_body[li].rstrip()
+                    ref_l = ref_body[li].rstrip()
+                    if file_l != ref_l:
+                        lw.append(file_path + " : license body text does not match LICENSE_" + license_type +
+                                  " at line " + str(body_start + li + 1))
+                        break
+
+                # ADIJESD204: validate secondary copyright years inside the license body
+                if license_type == "ADIJESD204":
+                    inner_changed = _check_jesd204_inner_copyrights(
+                        file_path, list_of_lines, body_start, body_end,
+                        currentYear, lw, edit_files)
+                    if inner_changed and header_status != 1:
+                        header_status = 1
+
+        elif allow_old_dual:
+            # no short identifier: old dual-license header (GPL + ADIBSD)
+            body_start = id_line_nb
+            body_end = None
+            for bi in range(body_start, len(list_of_lines)):
+                stripped = list_of_lines[bi].strip()
+                if re.match(r'^(//\s*\*{5,}|#{5,})', stripped):
+                    body_end = bi
+                    break
+
+            if body_end is not None:
+                file_body = [_strip_comment_prefix(list_of_lines[bi]) for bi in range(body_start, body_end)]
+                if len(file_body) != len(OLD_DUAL_LICENSE_BODY):
+                    lw.append(file_path + " : old dual-license body text does not match expected template" +
+                              " (expected " + str(len(OLD_DUAL_LICENSE_BODY)) + " lines, got " + str(len(file_body)) + ")")
+                else:
+                    for li in range(len(OLD_DUAL_LICENSE_BODY)):
+                        file_l = file_body[li].rstrip()
+                        ref_l = OLD_DUAL_LICENSE_BODY[li].rstrip()
+                        if file_l != ref_l:
+                            lw.append(file_path + " : old dual-license body text does not match expected template" +
+                                      " at line " + str(body_start + li + 1))
+                            break
+
     return header_status
+
+
+def _check_jesd204_inner_copyrights(file_path, list_of_lines, body_start, body_end,
+                                     currentYear, lw, edit_files):
+    any_changed = False
+    years_re = re.compile(
+        r'(copyright\s*\(C\)\s*)(?P<years>(?:20\d{2}(?:\s*-\s*20\d{2})?)(?:\s*,\s*(?:20\d{2}(?:\s*-\s*20\d{2})?))*)',
+        re.IGNORECASE
+    )
+    for idx in range(body_start, body_end):
+        line = list_of_lines[idx]
+        im = years_re.search(line)
+        if not im:
+            continue
+        inner_years = im.group('years')
+        inner_norm = normalize_str(inner_years)
+        inner_tokens = [t.strip() for t in inner_norm.split(",") if t.strip()]
+        inner_parsed = []
+        for tok in inner_tokens:
+            m1 = re.fullmatch(r"(20\d{2})-(20\d{2})", tok)
+            if m1:
+                a, b = int(m1.group(1)), int(m1.group(2))
+                if a > b:
+                    a, b = b, a
+                inner_parsed.append({"t": "range", "a": a, "b": b})
+                continue
+            m2 = re.fullmatch(r"(20\d{2})", tok)
+            if m2:
+                y = int(m2.group(1))
+                inner_parsed.append({"t": "single", "a": y, "b": y})
+                continue
+
+        if not inner_parsed:
+            continue
+
+        inner_last = inner_parsed[-1]["b"]
+        if inner_last == currentYear:
+            continue
+
+        dif = currentYear - inner_last
+        lw.append(file_path + " : inner copyright year at line " + str(idx + 1) +
+                  " missing current year " + str(currentYear))
+
+        if edit_files:
+            inner_proposed = [dict(p) for p in inner_parsed]
+            if dif == 1:
+                if inner_proposed[-1]["t"] == "single":
+                    inner_proposed[-1] = {"t": "range", "a": inner_proposed[-1]["a"], "b": currentYear}
+                else:
+                    inner_proposed[-1]["b"] = currentYear
+            elif dif > 1:
+                inner_proposed.append({"t": "single", "a": currentYear, "b": currentYear})
+
+            inner_proposed_text = ", ".join(
+                (f"{t['a']}" if t["a"] == t["b"] else f"{t['a']}-{t['b']}") for t in inner_proposed
+            )
+            start_i = im.start('years')
+            end_i = im.end('years')
+            new_inner_line = line[:start_i] + inner_proposed_text + line[end_i:]
+            if new_inner_line != line:
+                list_of_lines[idx] = new_inner_line
+                any_changed = True
+                lw.append(file_path + " : inner copyright year updated at line " + str(idx + 1))
+
+    return any_changed
+
+
+###############################################################################
+#
+# HDL license/copyright check.
+# The Copyright line is expected on the 3rd line (index 2) for .v/.sv files.
+# Delegates to _parse_copyright_years, which also validates the license body
+# (ADIBSD / ADIJESD204 / legacy dual-license). Modifies list_of_lines in place
+# when edit_files is set; the caller writes the file back.
+# Returns: 4 (no match), 1 (updated), 3 (out of date, not edited), 2 (ok).
+###############################################################################
+def check_copyright(file_path, list_of_lines, lw, edit_files):
+
+    currentYear = datetime.now().year
+
+    line_nb = 2
+    if line_nb >= len(list_of_lines):
+        lw.append(file_path + " : copyright template doesn't match")
+        return 4
+
+    return _parse_copyright_years(file_path, list_of_lines, line_nb, currentYear,
+                                  lw, edit_files, allow_old_dual=True)
+
+
+###############################################################################
+#
+# Lightweight license check for non-HDL files (.tcl, .ttcl, .xdc, .sdc, .pdc,
+# .py, .sh, .pl, .vh). Validates ONLY the copyright year(s) and the ADIBSD /
+# ADIJESD204 license body text - no structural / guideline checks. The
+# copyright line position varies by file type (e.g. a leading shebang), so it
+# is located by searching the top of the file. The file is rewritten in place
+# when edit_files is set and something changed.
+###############################################################################
+def check_license_header(file_path, lw, edit_files):
+
+    currentYear = datetime.now().year
+
+    if not copyright_check_allowed(file_path):
+        return
+
+    with open(file_path, "r") as f:
+        list_of_lines = f.readlines()
+
+    # the copyright line is not at a fixed index across file types, so search
+    # for it near the top. The header copyright always precedes any copyright
+    # text that may appear inside the license body.
+    copyright_idx = None
+    scan_limit = min(len(list_of_lines), 15)
+    for i in range(scan_limit):
+        if re.search(r'Copyright\s*\(C\)\s*20\d{2}', list_of_lines[i]):
+            copyright_idx = i
+            break
+
+    if copyright_idx is None:
+        lw.append(file_path + " : copyright header not found")
+        return
+
+    # only the ADIBSD / ADIJESD204 full-text bodies are validated (allow_old_dual=False)
+    header_status = _parse_copyright_years(file_path, list_of_lines, copyright_idx,
+                                           currentYear, lw, edit_files,
+                                           allow_old_dual=False)
+
+    if edit_files and header_status == 1:
+        rewrite_file(file_path, list_of_lines)
 
 
 ###############################################################################
@@ -932,11 +1247,11 @@ def get_and_check_module (module_path, lw, edit_files):
     ## do not check the license status for the files that must be avoided,
     ## since it doesn't apply
     if (header_check_allowed(module_path)):
-        header_status = check_copyright(module_path, list_of_lines, lw, edit_files)
-        # GC: check if the license header is updated
-        if (header_status == -1):
-            edited = False
-            lw.append(module_path + " : copyright text doesn't match the pattern for the Copyright year")
+        if copyright_check_allowed(module_path):
+            header_status = check_copyright(module_path, list_of_lines, lw, edit_files)
+            # GC: check if the license header is updated
+            if (header_status == -1):
+                lw.append(module_path + " : copyright text doesn't match the pattern for the Copyright year")
     else:
         header_status = -1
 
@@ -1010,7 +1325,7 @@ def get_and_check_module (module_path, lw, edit_files):
             pos_paranth2 = line.find(")")
 
             if (0 <= pos_paranth2 and pos_paranth2 < pos_paranth1):
-                if (re.search("\)\\s\(", line) != None):
+                if (re.search(r"\)\s\(", line) != None):
 
                     rest_of_line = line.strip().strip("(").strip().strip(")")
                     ## GC: situations when the guideline is not respected:
@@ -1131,7 +1446,7 @@ def get_and_check_module (module_path, lw, edit_files):
                 # 2nd situation
                 if (pos_diez > 0):
                     if (pos_paranth1 == pos_diez + 1):
-                        module_name = re.search("module(.*?)#\(", line)
+                        module_name = re.search(r"module(.*?)#\(", line)
                         if (module_name != None):
                             module_name = module_name.group(1)
                             module_name = module_name.strip()
@@ -1236,9 +1551,10 @@ def get_and_check_package(package_path, lw, edit_files):
 
     # Do not check license for files that must be avoided
     if header_check_allowed(package_path):
-        header_status = check_copyright(package_path, list_of_lines, lw, edit_files)
-        if header_status == -1:
-            lw.append(f"{package_path} : copyright text doesn't match the pattern")
+        if copyright_check_allowed(package_path):
+            header_status = check_copyright(package_path, list_of_lines, lw, edit_files)
+            if header_status == -1:
+                lw.append(f"{package_path} : copyright text doesn't match the pattern")
     else:
         header_status = -1
 
@@ -1391,27 +1707,38 @@ def check_project_name_vs_path(modified_files, lw, edit_files=False, checked_pro
 
             if os.path.exists(tcl_path) and folder not in checked_projects:
                 rel_path = os.path.relpath(folder, projects_abs)
-                expected_name = rel_path.replace(os.sep, "_")
+                parts = rel_path.split(os.sep)
+                # carrier templates live under projects/common/<carrier> and are
+                # named template_<carrier> instead of <project>_<carrier>
+                if parts[0] == "common":
+                    expected_name = "template_" + "_".join(parts[1:])
+                else:
+                    expected_name = rel_path.replace(os.sep, "_")
+
+                # matches the project name after adi_project, adi_project_files
+                # and adi_project_run (group 1 = command + spacing, group 2 = name)
+                cmd_re = re.compile(r'^(\s*adi_project(?:_files|_run)?\s+)(\S+)')
 
                 lines, found, changed = [], False, False
 
                 with open(tcl_path, "r") as tclf:
                     for line in tclf:
-                        m = re.match(r'\s*adi_project\s+(\S+)', line)
+                        m = cmd_re.match(line)
                         if m:
                             found = True
-                            found_name = m.group(1)
+                            cmd_name = m.group(1).strip()
+                            found_name = m.group(2)
                             if found_name != expected_name:
-                                lw.append(f"./{tcl_path_rel} : adi_project '{found_name}' does not match expected '{expected_name}'")
+                                lw.append(f"./{tcl_path_rel} : {cmd_name} '{found_name}' does not match expected '{expected_name}'")
                                 if edit_files:
-                                    line = re.sub(r'(\s*adi_project\s+)\S+', r'\1' + expected_name, line)
+                                    line = cmd_re.sub(lambda mm: mm.group(1) + expected_name, line)
                                     changed = True
                         lines.append(line)
 
                 if edit_files and found and changed:
                     with open(tcl_path, "w") as tclf:
                         tclf.writelines(lines)
-                    lw.append(f"./{tcl_path_rel} : adi_project updated to '{expected_name}'")
+                    lw.append(f"./{tcl_path_rel} : adi_project name(s) updated to '{expected_name}'")
 
                 checked_projects.add(folder)
                 break
@@ -1429,50 +1756,54 @@ def check_project_name_vs_path(modified_files, lw, edit_files=False, checked_pro
 def find_occurrences (directory, module_name, list_of_files):
 
     occurrences_list = []
-    for folder, dirs, files in os.walk(directory):
 
-        ## only folder paths without a dot
-        ## and to be either from /library or from /projects
-        if (not ((folder[1:-2]).find(".") == -1
-            and (folder.find("library") != -1 or folder.find("projects") != -1))):
-            continue
+    if list_of_files:
+        search_files = list(list_of_files)
+    else:
+        search_files = []
+        for folder, dirs, files in os.walk(directory):
 
-        for file in files:
-            fullpath = os.path.join(folder, file)
-
-            if (not check_hdl_filename(fullpath)):
+            ## only folder paths without a dot
+            ## and to be either from /library or from /projects
+            if (not ((folder[1:-2]).find(".") == -1
+                and (folder.find("library") != -1 or folder.find("projects") != -1))):
                 continue
 
-            search = False
-            if (list_of_files and (string_in_list(fullpath, list_of_files))):
-                search = True
-            elif (not list_of_files):
-                search = True
+            for file in files:
+                fullpath = os.path.join(folder, file)
+                if (check_hdl_filename(fullpath)):
+                    search_files.append(fullpath)
 
-            ## the file with the module definition is not accepted and
-            ## neither the files that have to be avoided
-            if search and file not in (module_name + ".v", module_name + ".sv"):
-                with codecs.open(fullpath, 'r', encoding='utf-8', errors='ignore') as f:
-                    line_nb = 1
+    for fullpath in search_files:
+        if (not check_hdl_filename(fullpath)):
+            continue
 
-                    for line in f:
-                        if ((line.find(module_name) != -1) and (not is_comment(line))):
-                            pos = line.find(module_name)
-                            pos_dot = line.find(".")
+        file = os.path.basename(fullpath)
 
-                            # if there is no dot before the module name
-                            if (pos_dot == -1 or pos < pos_dot):
-                                if ((line[pos+len(module_name)] == ' ') or (line[pos+len(module_name)] == '#')
-                                    or (line[pos+len(module_name)] == '(') or (line[pos+len(module_name)] == '\t')):
-                                    # if before the instance name there are only spaces, then it is ok
-                                    if (only_spaces_or_tabs(line[:pos-1]) == True):
-                                        new_occurrence = Occurrence(path=fullpath, line=line_nb)
-                                        ## check if it has a parameters list;
-                                        ## then instance name is on the same line
-                                        if ("#" not in line):
-                                            new_occurrence.pos_start_ports = 0
-                                        occurrences_list.append(new_occurrence)
-                        line_nb += 1
+        ## the file with the module definition is not accepted and
+        ## neither the files that have to be avoided
+        if file not in (module_name + ".v", module_name + ".sv"):
+            with codecs.open(fullpath, 'r', encoding='utf-8', errors='ignore') as f:
+                line_nb = 1
+
+                for line in f:
+                    if ((line.find(module_name) != -1) and (not is_comment(line))):
+                        pos = line.find(module_name)
+                        pos_dot = line.find(".")
+
+                        # if there is no dot before the module name
+                        if (pos_dot == -1 or pos < pos_dot):
+                            if ((line[pos+len(module_name)] == ' ') or (line[pos+len(module_name)] == '#')
+                                or (line[pos+len(module_name)] == '(') or (line[pos+len(module_name)] == '\t')):
+                                # if before the instance name there are only spaces, then it is ok
+                                if (only_spaces_or_tabs(line[:pos-1]) == True):
+                                    new_occurrence = Occurrence(path=fullpath, line=line_nb)
+                                    ## check if it has a parameters list;
+                                    ## then instance name is on the same line
+                                    if ("#" not in line):
+                                        new_occurrence.pos_start_ports = 0
+                                    occurrences_list.append(new_occurrence)
+                    line_nb += 1
     return occurrences_list
 
 
@@ -1525,14 +1856,14 @@ def set_occurrence_lines (occurrence_item, list_of_lines):
         ## the ports should start from the next line, which is pos_start_ports+1
 
         # find a string that is spread over multiple lines
-        aux_instance_name = re.findall('\)\n(.*?)\(', all_inst_lines, re.M)
+        aux_instance_name = re.findall(r'\)\n(.*?)\(', all_inst_lines, re.M)
 
         # if )\n i_... (
         if (len(aux_instance_name) > 0):
             instance_name = aux_instance_name[0].strip(" ")
         else:
             # if ) i_... (
-            instance_name = re.findall('\)(.*?)\(', all_inst_lines, re.M)[0].strip(" ")
+            instance_name = re.findall(r'\)(.*?)\(', all_inst_lines, re.M)[0].strip(" ")
 
         line_nb = 1
         pos_start_ports = -1
@@ -1625,7 +1956,7 @@ def check_guideline_instances (occurrence_item, lw):
 
                     # for the line where the instance name is
                     # find a string like )\n ... (
-                    aux_instance_name = re.findall('\)\n(.*?)\(', all_inst_lines, re.M)
+                    aux_instance_name = re.findall(r'\)\n(.*?)\(', all_inst_lines, re.M)
                     instance_name = ""
 
                     # if )\n i_... (
@@ -1637,7 +1968,7 @@ def check_guideline_instances (occurrence_item, lw):
                     else:
                         try:
                             # if ) i_... (
-                            instance_name = re.findall('\)(.*?)\(', all_inst_lines, re.M)[0].strip(" ")
+                            instance_name = re.findall(r'\)(.*?)\(', all_inst_lines, re.M)[0].strip(" ")
                         except Exception:
                             lw.append(occurrence_item.path + " : " + str(occurrence_item.line + occurrence_item.pos_start_ports) + " couldn't extract instance name")
 
@@ -1722,11 +2053,14 @@ def check_guideline_instances (occurrence_item, lw):
 ## all files given as parameters to the script (or all files from repo
 ## if no flag is specified)
 modified_files = []
+# non-HDL files (.tcl, .xdc, .py, ...) that only receive the license-only check
+license_only_files = []
 error_files = []
 edit_files = False
 guideline_ok = True
-# detect all modules from current directory (hdl)
-all_hdl_files = detect_all_hdl_files("./")
+all_hdl_files = None
+# whole-repository scan only for the no-arg run or -e (see the fallback below)
+scan_all_files = False
 
 
 xilinx_modules = []
@@ -1781,6 +2115,9 @@ if (len(sys.argv) > 1):
                         #module_path = os.path.abspath(os.path.join(folder, sys.argv[arg_nb]))
                         file_path = os.path.join(folder, sys.argv[arg_nb])
                         modified_files.append(file_path)
+                    elif((name == sys.argv[arg_nb]) and (check_license_only_filename(name))):
+                        file_path = os.path.join(folder, sys.argv[arg_nb])
+                        license_only_files.append(file_path)
             arg_nb += 1
 
     # -p means a path/s will be specified
@@ -1795,6 +2132,8 @@ if (len(sys.argv) > 1):
             if (os.path.exists(sys.argv[arg_nb])):
                 if (check_hdl_filename(sys.argv[arg_nb])):
                     modified_files.append(sys.argv[arg_nb])
+                elif (check_license_only_filename(sys.argv[arg_nb])):
+                    license_only_files.append(sys.argv[arg_nb])
             else:
                 print(f"File {sys.argv[arg_nb]} doesn't exist!")
                 error_files.append(sys.argv[arg_nb])
@@ -1803,61 +2142,77 @@ if (len(sys.argv) > 1):
     # -e means it will be run on all files, making changes in them
     if (sys.argv[1] == "-e"):
         edit_files = True
-        modified_files = detect_all_hdl_files("./")
+        scan_all_files = True
 
 else:
     ## if there is no argument then the script is run on all files,
     ## and without making changes in them
     edit_files = False
-    modified_files = detect_all_hdl_files("./")
+    scan_all_files = True
+
+# only scan the whole repository for the no-arg run or -e; when specific files
+# are given (-p, -pe, -m, -me) never fall back to a full-repo scan, even if none
+# of them are HDL/license files (e.g. a PR that only touches docs).
+if scan_all_files:
+    if all_hdl_files is None:
+        all_hdl_files = detect_all_hdl_files("./")
+    modified_files = list(all_hdl_files)
+    # testbench files are not part of the full guideline check, but they still
+    # get the lightweight license-only check
+    license_only_files += detect_all_tb_files("./")
 
 # no matter the number of arguments
-if (len(modified_files) <= 0):
+if (len(modified_files) <= 0 and len(license_only_files) <= 0):
     print("NO detected modules")
     guideline_ok = True
     sys.exit(0)
-else:
-    for file_path in all_hdl_files:
 
-        file_name = get_file_name(file_path)
-        pkg_module_name = file_name
-        # list of warnings
-        lw = []
+# when a subset of files is specified (-p, -m, -pe, -me), iterate only
+# over those files instead of every HDL file in the repository
+files_to_check = modified_files
 
-        # if the detected module is between the modified files
-        if (string_in_list(file_path, modified_files)):
-            if detect_file_unit_(file_path) == "package":
-                # if the file is a package, then check the package definition
-                pkg_module_name = get_and_check_package(file_path, lw, edit_files=edit_files)
-            else:
-                # if the file is a module, then check the module definition
-                pkg_module_name = get_and_check_module(file_path, lw, edit_files=edit_files)
+for file_path in files_to_check:
 
-            # file_name is without the known extension, which is .v or .sv
-            if (pkg_module_name != file_name):
-                print(f"\n -> pkg_module_name {pkg_module_name} != file_name {file_name}")
-                # applies only to the library folder
-                if (file_path.find("library") != -1):
-                    guideline_ok = False
-                    error_files.append(file_path)
-            # check if the project name matches the path and add warnings to the same lw list
-            check_project_name_vs_path([file_path], lw, edit_files, checked_projects=PROJECTS_CHECKED)
+    file_name = get_file_name(file_path)
+    pkg_module_name = file_name
+    # list of warnings
+    lw = []
 
-        ## system_top modules won't be instantiated anywhere in other
-        ## Verilog or SystemVerilog files
-        if (file_path.find("system_top") == -1):
-            # will search for instances only in the files given as arguments
-            occurrences_list = find_occurrences("./", pkg_module_name, modified_files)
-            if (len(occurrences_list) > 0):
-                for occurrence_item in occurrences_list:
-                    check_guideline_instances(occurrence_item, lw)
+    if detect_file_unit_(file_path) == "package":
+        # if the file is a package, then check the package definition
+        pkg_module_name = get_and_check_package(file_path, lw, edit_files=edit_files)
+    else:
+        # if the file is a module, then check the module definition
+        pkg_module_name = get_and_check_module(file_path, lw, edit_files=edit_files)
 
-        if (len(lw) > 0):
+    # file_name is without the known extension, which is .v or .sv
+    if (pkg_module_name != file_name):
+        print(f"\n -> pkg_module_name {pkg_module_name} != file_name {file_name}")
+        # applies only to the library folder
+        if (file_path.find("library") != -1):
             guideline_ok = False
-            print ("\n -> For %s in:" % file_path)
-            for message in lw:
-                print(message)
+            error_files.append(file_path)
+    # check if the project name matches the path and add warnings to the same lw list
+    check_project_name_vs_path([file_path], lw, edit_files, checked_projects=PROJECTS_CHECKED)
 
+    ## system_top modules won't be instantiated anywhere in other
+    ## Verilog or SystemVerilog files
+    if (file_path.find("system_top") == -1):
+        # will search for instances only in the files given as arguments
+        occurrences_list = find_occurrences("./", pkg_module_name, modified_files)
+        if (len(occurrences_list) > 0):
+            for occurrence_item in occurrences_list:
+                check_guideline_instances(occurrence_item, lw)
+
+    if (len(lw) > 0):
+        guideline_ok = False
+        print ("\n -> For %s in:" % file_path)
+        for message in lw:
+            print(message)
+
+# the xilinx-instantiation checks only apply when HDL files are being checked;
+# with only non-HDL files, find_occurrences would needlessly walk the whole repo
+if modified_files:
     for file_name in xilinx_modules:
         lw = []
         xilinx_occ_list = find_occurrences("./", file_name, modified_files)
@@ -1865,7 +2220,7 @@ else:
         if (len(xilinx_occ_list) > 0):
             for xilinx_occ_it in xilinx_occ_list:
                 # if the xilinx module was found in the files that are of interest
-                for it in all_hdl_files:
+                for it in files_to_check:
                     if (xilinx_occ_it.path == it):
                         # only then to check the guideline
                         check_guideline_instances(xilinx_occ_it, lw)
@@ -1881,26 +2236,40 @@ else:
                     guideline_ok = False
                     print(message)
 
-    if (error_files):
-        error_in_library = False
+# non-HDL files: lightweight license-only check
+# (copyright year + ADIBSD/ADIJESD204 license body, nothing else)
+for file_path in license_only_files:
+    lw = []
+    check_license_header(file_path, lw, edit_files)
+    # project name check applies to system_project.tcl (and sibling project files)
+    check_project_name_vs_path([file_path], lw, edit_files, checked_projects=PROJECTS_CHECKED)
 
+    if (len(lw) > 0):
+        guideline_ok = False
+        print ("\n -> For %s in:" % file_path)
+        for message in lw:
+            print(message)
+
+if (error_files):
+    error_in_library = False
+
+    for file in error_files:
+        ## for files in /projects folder,
+        ## the module - file name check doesn't matter
+        if (file.find("library") != -1):
+            error_in_library = True
+
+    if (error_in_library):
+        guideline_ok = False
+        print ("Files with name errors:")
         for file in error_files:
             ## for files in /projects folder,
             ## the module - file name check doesn't matter
             if (file.find("library") != -1):
-                error_in_library = True
+                print (file)
 
-        if (error_in_library):
-            guideline_ok = False
-            print ("Files with name errors:")
-            for file in error_files:
-                ## for files in /projects folder,
-                ## the module - file name check doesn't matter
-                if (file.find("library") != -1):
-                    print (file)
-
-    if (not guideline_ok):
-        print("\nGUIDELINE RULES ARE NOT FOLLOWED\n")
-        sys.exit(1)
-    else:
-        sys.exit(0)
+if (not guideline_ok):
+    print("\nGUIDELINE RULES ARE NOT FOLLOWED\n")
+    sys.exit(1)
+else:
+    sys.exit(0)
